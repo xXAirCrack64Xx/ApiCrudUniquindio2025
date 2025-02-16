@@ -2,79 +2,67 @@ package com.uniquindio.api.crud.model;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import jakarta.persistence.*;
-
+import jakarta.validation.constraints.*;
+import lombok.Data;
 @Entity
 @Table(name = "usuarios")
 @Schema(description = "Entidad que representa a un usuario (estudiante o profesor)")
+@Data
 public class Usuario {
 
+    /**
+     * Identificador único del usuario, autoincremental.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Schema(description = "Identificador único del usuario", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     private Long id;
 
+    /**
+     * Nombre completo del usuario.
+     * Debe contener entre 3 y 50 caracteres y no puede estar vacío.
+     */
     @Schema(description = "Nombre del usuario", example = "Juan Pérez")
+    @NotBlank(message = "El nombre es obligatorio")
+    @Size(min = 3, max = 50, message = "El nombre debe tener entre 3 y 50 caracteres")
     private String nombre;
 
+    /**
+     * Número de cédula del usuario, debe ser único.
+     * Solo puede contener hasta 10 dígitos numéricos.
+     */
+    @Schema(description = "Cédula del usuario", example = "1234567890")
+    @NotBlank(message = "La cédula es obligatoria")
+    @Size(max = 10, message = "La cédula debe tener máximo 10 dígitos")
+    @Pattern(regexp = "^\\d+$", message = "La cédula solo puede contener números")
+    @Column(unique = true, nullable = false)
+    private String cedula;
+
+    /**
+     * Correo electrónico del usuario, debe ser único y tener un formato válido.
+     */
     @Schema(description = "Correo electrónico del usuario", example = "juan.perez@uniquindio.edu")
+    @NotBlank(message = "El correo es obligatorio")
+    @Email(message = "El correo debe tener un formato válido")
+    @Size(max = 50, message = "El correo no puede superar los 50 caracteres")
+    @Column(unique = true, nullable = false)
     private String email;
 
+    /**
+     * Rol del usuario dentro del sistema.
+     * Puede ser PROFESOR o ESTUDIANTE.
+     */
     @Schema(description = "Rol del usuario (PROFESOR o ESTUDIANTE)", example = "ESTUDIANTE")
-    private String rol;
+    @NotNull(message = "El rol es obligatorio")
+    @Enumerated(EnumType.STRING)
+    private RolUsuario rol;
 
+    /**
+     * Clase a la que pertenece el usuario.
+     * Es opcional y no puede superar los 50 caracteres.
+     */
     @Schema(description = "Clase a la que pertenece el usuario", example = "Programación I")
+    @Size(max = 50, message = "El nombre de la clase no puede superar los 50 caracteres")
     private String clase;
-
-    // Constructores, getters y setters
-    public Usuario() { }
-
-    public Usuario(String nombre, String email, String rol, String clase) {
-        this.nombre = nombre;
-        this.email = email;
-        this.rol = rol;
-        this.clase = clase;
-    }
-
-
-    // Getters y Setters
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getNombre() {
-        return nombre;
-    }
-
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getRol() {
-        return rol;
-    }
-
-    public void setRol(String rol) {
-        this.rol = rol;
-    }
-
-    public String getClase() {
-        return clase;
-    }
-
-    public void setClase(String clase) {
-        this.clase = clase;
-    }
 }
+

@@ -24,7 +24,7 @@ public class OpenApiConfig {
                                 "Los endpoints permiten realizar operaciones CRUD sobre usuarios y gestionar el envío y calificación de trabajos.")
                         .contact(new Contact()
                                 .name("Diego Alejandro Pastrana Fernandez, Santiago Fernandez, Andres Felipe Rendon y Juan Camilo Valbuena")
-                                .email("diegoa.pastranaf@uqvirtual.edu.co")
+                                .email("diegoa.pastranaf@uqvirtual.edu.co, andresf.rendonn@uqvirtual.edu.co")
                                 .url("https://www.uniquindio.edu.co/")
 
                         )
