@@ -24,7 +24,7 @@ import java.util.Map;
 
 @Tag(name = "Usuarios", description = "Endpoints para gestionar usuarios: creación, consulta, actualización y eliminación.")
 @RestController
-@RequestMapping("/api/usuarios")
+@RequestMapping("/api/usuarios") //Rama Andres
 public class UsuarioController {
 
     @Autowired
