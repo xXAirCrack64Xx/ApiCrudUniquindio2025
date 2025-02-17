@@ -1,19 +1,26 @@
 package com.uniquindio.api.crud.services;
 
+import com.uniquindio.api.crud.dto.UsuarioDTO;
+import com.uniquindio.api.crud.dto.UsuarioResponseDTO;
 import com.uniquindio.api.crud.model.RolUsuario;
 import com.uniquindio.api.crud.model.Usuario;
 import com.uniquindio.api.crud.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+
+import javax.swing.*;
 
 @Service
 public class UsuarioService{
@@ -23,123 +30,108 @@ public class UsuarioService{
     @Autowired
     UsuarioRepository usuarioRepository;
 
-    //GET USUARIO POR ID
-    public Usuario findById(Long id) {
+    // GET USUARIO POR ID
+    public UsuarioResponseDTO findById(Long id) {
         logger.info("Buscando usuario con ID: {}", id);
 
         try {
-            return usuarioRepository.findById(id)
+            Usuario usuario = usuarioRepository.findById(id)
                     .orElseThrow(() -> {
                         logger.warn("Usuario no encontrado con ID: {}", id);
                         return new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con ID: " + id);
                     });
+            return convertirDTOResponse(usuario);
         } catch (ResponseStatusException e) {
-            throw e;  // Mantenemos la excepción capturada.
+            throw e;
         } catch (Exception e) {
             logger.error("Error interno al buscar usuario con ID: {}", id, e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno en el servidor", e);
         }
     }
 
-    //GET TODOS LOS USUARIOS
-    public List<Usuario> findAll() {
-        logger.info("Obteniendo todos los usuarios");
-
+    // GET TODOS LOS USUARIOS
+    public Page<UsuarioResponseDTO> findAll(Pageable pageable) {
+        logger.info("Obteniendo usuarios con paginación: {}", pageable);
         try {
-            List<Usuario> usuarios = usuarioRepository.findAll();
+            Page<Usuario> usuarios = usuarioRepository.findAll(pageable);
+
             if (usuarios.isEmpty()) {
                 logger.warn("No se encontraron usuarios en la base de datos");
                 throw new ResponseStatusException(HttpStatus.NO_CONTENT, "No hay usuarios registrados");
             }
-            return usuarios;
-        }catch (ResponseStatusException e) {
+            return usuarios.map(this::convertirDTOResponse);
+        } catch (ResponseStatusException e) {
             throw e;
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             logger.error("Error al obtener los usuarios", e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno del servidor", e);
         }
     }
 
+
+
     //DELETE USUARIO
     public void deleteById(Long id) {
         logger.info("Intentando eliminar usuario con ID: {}", id);
 
-        Optional<Usuario> usuarioOpt = usuarioRepository.findById(id);
-
-        if (usuarioOpt.isEmpty()) {
+        if (!usuarioRepository.existsById(id)) {
             logger.warn("No se encontró el usuario con ID: {}", id);
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con id: " + id);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con ID: " + id);
         }
+
         try {
             usuarioRepository.deleteById(id);
             logger.info("Usuario eliminado correctamente con ID: {}", id);
         } catch (Exception e) {
-            logger.error("Error inesperado al eliminar usuario con ID: {} - {}", id, e.getMessage());
+            logger.error("Error inesperado al eliminar usuario con ID {}: {}", id, e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo eliminar el usuario");
         }
     }
 
+
     //POST USUARIOS
-    public Usuario save(Usuario usuario) {
+    public UsuarioResponseDTO save(Usuario usuario) {
         logger.info("Intentando guardar un nuevo usuario en la base de datos...");
 
-        // Verificar si cedula o correo ya existen
         if (usuarioRepository.existsByCedula(usuario.getCedula())) {
-            logger.warn("Intento de crear usuario con cédula duplicada: {}", usuario.getCedula());
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La cédula ya está registrada");
         }
-
         if (usuarioRepository.existsByEmail(usuario.getEmail())) {
-            logger.warn("Intento de crear usuario con correo duplicado: {}", usuario.getEmail());
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
 
         try {
             Usuario guardado = usuarioRepository.save(usuario);
-            logger.info("Usuario guardado con éxito: {}", guardado.getNombre());
-            return guardado;
-
-        } catch (DataIntegrityViolationException e) {
-            logger.warn("Error al guardar usuario: Datos inválidos o duplicados.");
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos inválidos o duplicados");
-
+            return convertirDTOResponse(guardado);
         } catch (Exception e) {
             logger.error("Error inesperado al guardar usuario: {}", e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno del servidor");
         }
     }
 
-    //ACTUALIZACION completa Usuarios
-    public Usuario updateUsuario(Long id, Usuario usuarioDetails) {
-        logger.info("Buscando usuario con ID: {}", id);
 
+    //ACTUALIZACION completa Usuarios
+    public UsuarioDTO updateUsuario(Long id, UsuarioDTO usuarioDetails) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con ID: " + id));
 
-        logger.info("Verificando unicidad de cédula: {}", usuarioDetails.getCedula());
-        Optional<Usuario> usuarioPorCedula = usuarioRepository.findByCedula(usuarioDetails.getCedula());
-        if (usuarioPorCedula.isPresent() && !usuarioPorCedula.get().getId().equals(id)) {
+        if (usuarioRepository.existsByCedula(usuarioDetails.cedula()) && !usuario.getId().equals(id)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cédula ya está en uso por otro usuario.");
         }
 
-        logger.info("Verificando unicidad de correo: {}", usuarioDetails.getEmail());
-        Optional<Usuario> usuarioPorCorreo = usuarioRepository.findByEmail(usuarioDetails.getEmail());
-        if (usuarioPorCorreo.isPresent() && !usuarioPorCorreo.get().getId().equals(id)) {
+        if (usuarioRepository.existsByEmail(usuarioDetails.email()) && !usuario.getId().equals(id)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Correo ya está en uso por otro usuario.");
         }
 
-        logger.info("Actualizando datos del usuario con ID: {}", id);
-        usuario.setNombre(usuarioDetails.getNombre());
-        usuario.setEmail(usuarioDetails.getEmail());
-        usuario.setCedula(usuarioDetails.getCedula());
-        usuario.setRol(usuarioDetails.getRol());
-        usuario.setClase(usuarioDetails.getClase());
+        usuario.setNombre(usuarioDetails.nombre());
+        usuario.setEmail(usuarioDetails.email());
+        usuario.setCedula(usuarioDetails.cedula());
+        usuario.setRol(RolUsuario.valueOf(usuarioDetails.rol()));
+        usuario.setClase(usuarioDetails.clase());
 
         try {
             Usuario updatedUsuario = usuarioRepository.save(usuario);
-            logger.info("Usuario con ID {} actualizado correctamente.", id);
-            return updatedUsuario;
+            return convertirADTO(updatedUsuario);
         } catch (Exception e) {
             logger.error("Error inesperado al actualizar usuario con ID {}: {}", id, e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo actualizar el usuario");
@@ -147,54 +139,75 @@ public class UsuarioService{
     }
 
     //ACTUALIZACION parcial Usuarios
-    public Usuario partialUpdateUsuario(Long id, Map<String, Object> updates) {
-        logger.info("Buscando usuario con ID: {}", id);
-
+    public UsuarioDTO partialUpdateUsuario(Long id, Map<String, Object> updates) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado con ID: " + id));
 
-        updates.forEach((key, value) -> {
-            logger.info("Actualizando campo: {} con valor: {}", key, value);
+        if (updates.containsKey("nombre")) {
+            usuario.setNombre(String.valueOf(updates.get("nombre")));
+        }
 
-            switch (key) {
-                case "nombre":
-                    usuario.setNombre((String) value);
-                    break;
-                case "email":
-                    String newEmail = (String) value;
-                    Optional<Usuario> usuarioPorCorreo = usuarioRepository.findByEmail(newEmail);
-                    if (usuarioPorCorreo.isPresent() && !usuarioPorCorreo.get().getId().equals(id)) {
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "Correo ya está en uso por otro usuario.");
-                    }
-                    usuario.setEmail(newEmail);
-                    break;
-                case "cedula":
-                    String newCedula = (String) value;
-                    Optional<Usuario> usuarioPorCedula = usuarioRepository.findByCedula(newCedula);
-                    if (usuarioPorCedula.isPresent() && !usuarioPorCedula.get().getId().equals(id)) {
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "Cédula ya está en uso por otro usuario.");
-                    }
-                    usuario.setCedula(newCedula);
-                    break;
-                case "rol":
-                    usuario.setRol(RolUsuario.valueOf((String) value));
-                    break;
-                case "clase":
-                    usuario.setClase((String) value);
-                    break;
-                default:
-                    logger.warn("Campo desconocido: {} - Se ignora.", key);
+        if (updates.containsKey("email")) {
+            String newEmail = String.valueOf(updates.get("email"));
+            if (usuarioRepository.findByEmail(newEmail).isPresent() && !usuario.getId().equals(id)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Correo ya está en uso por otro usuario.");
             }
-        });
+            usuario.setEmail(newEmail);
+        }
+
+        if (updates.containsKey("cedula")) {
+            String newCedula = String.valueOf(updates.get("cedula"));
+            if (usuarioRepository.findByCedula(newCedula).isPresent() && !usuario.getId().equals(id)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cédula ya está en uso por otro usuario.");
+            }
+            usuario.setCedula(newCedula);
+        }
+
+        if (updates.containsKey("rol")) {
+            try {
+                usuario.setRol(RolUsuario.valueOf(String.valueOf(updates.get("rol"))));
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor de rol no válido.");
+            }
+        }
+
+        if (updates.containsKey("clase")) {
+            usuario.setClase(String.valueOf(updates.get("clase")));
+        }
 
         try {
             Usuario updatedUsuario = usuarioRepository.save(usuario);
-            logger.info("Usuario con ID {} actualizado parcialmente.", id);
-            return updatedUsuario;
+            return convertirADTO(updatedUsuario);
         } catch (Exception e) {
             logger.error("Error inesperado al actualizar usuario con ID {}: {}", id, e.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No se pudo actualizar el usuario");
         }
+    }
+
+
+
+
+    private UsuarioDTO convertirADTO(Usuario usuario) {
+        return new UsuarioDTO(
+                usuario.getId() != null ? usuario.getId() : 0L,
+                usuario.getNombre() != null ? usuario.getNombre() : "",
+                usuario.getCedula() != null ? usuario.getCedula() : "",
+                usuario.getEmail() != null ? usuario.getEmail() : "",
+                usuario.getRol() != null ? usuario.getRol().toString() : "ESTUDIANTE", // Asigna un valor por defecto
+                usuario.getClase() != null ? usuario.getClase() : "",
+                usuario.getClave() != null ? usuario.getClave() : ""
+        );
+    }
+
+    private UsuarioResponseDTO convertirDTOResponse(Usuario usuario) {
+
+        return new UsuarioResponseDTO(
+                usuario.getId() != null ? usuario.getId() : 0L,
+                usuario.getNombre() != null ? usuario.getNombre() : "",
+                usuario.getEmail() != null ? usuario.getEmail() : "",
+                usuario.getClase() != null ? usuario.getClase() : ""
+
+        );
     }
 
 }

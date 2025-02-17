@@ -1,6 +1,9 @@
 package com.uniquindio.api.crud.controller;
 
 import com.uniquindio.api.crud.dto.ErrorResponse;
+import com.uniquindio.api.crud.dto.UsuarioDTO;
+import com.uniquindio.api.crud.dto.UsuarioResponseDTO;
+import com.uniquindio.api.crud.model.RolUsuario;
 import com.uniquindio.api.crud.services.UsuarioService;
 import com.uniquindio.api.crud.model.Usuario;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,12 +16,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.server.ResponseStatusException;
+
+import javax.swing.*;
 import java.util.List;
 import java.util.Map;
 
@@ -47,26 +54,21 @@ public class UsuarioController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(mediaType = "application/json",
                             examples = @ExampleObject(value = "{\"codigo\": 500, \"mensaje\": \"Error interno del servidor. Inténtelo nuevamente más tarde.\"}")))
-
     })
     @GetMapping
-    public ResponseEntity<?> getAllUsuarios() {
-        logger.info("Solicitud recibida para obtener todos los usuarios");
-
+    public ResponseEntity<?> getAllUsuarios(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        logger.info("Solicitud recibida para obtener usuarios paginados - Página: {}, Tamaño: {}", page, size);
         try {
-            List<Usuario> usuarios = usuarioService.findAll();
+            Page<UsuarioResponseDTO> usuarios = usuarioService.findAll(PageRequest.of(page, size));
 
             if (usuarios.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NO_CONTENT)
                         .body(new ErrorResponse(204, "No hay usuarios registrados"));
             }
-
-            return ResponseEntity.ok(usuarios);  // 200 OK
+            return ResponseEntity.ok(usuarios);
         } catch (ResponseStatusException e) {
-            if (e.getStatusCode().value() == 204) {  // No Content
-                return ResponseEntity.status(e.getStatusCode())
-                        .body(new ErrorResponse(204, e.getReason()));
-            }
             logger.warn("Error en la obtención de usuarios: {}", e.getReason());
             return ResponseEntity.status(e.getStatusCode())
                     .body(new ErrorResponse(e.getStatusCode().value(), e.getReason()));
@@ -76,6 +78,7 @@ public class UsuarioController {
                     .body(new ErrorResponse(500, "Error interno del servidor"));
         }
     }
+
 
 
     @Operation(
@@ -121,8 +124,9 @@ public class UsuarioController {
 
         try {
             Long userId = Long.parseLong(id);
-            Usuario usuario = usuarioService.findById(userId);
-            return ResponseEntity.ok(usuario);  // 200 OK
+            UsuarioResponseDTO usuario = usuarioService.findById(userId);
+
+            return ResponseEntity.ok(usuario);  // 200 OK con UsuarioDTO
 
         } catch (NumberFormatException e) {
             logger.warn("ID inválido recibido: {}", id);
@@ -137,6 +141,7 @@ public class UsuarioController {
                     .body(new ErrorResponse(500, "Error interno del servidor"));
         }
     }
+
 
 
 
@@ -176,16 +181,31 @@ public class UsuarioController {
                                 """)))
     })
     @PostMapping
-    public ResponseEntity<?> createUsuario(
-            @Parameter(description = "Datos del usuario a crear", required = true, schema = @Schema(implementation = Usuario.class))
-            @Valid @RequestBody Usuario usuario) {
 
-        logger.info("Solicitud recibida para crear un nuevo usuario: {}", usuario.getNombre());
+    public ResponseEntity<?> createUsuario(
+            @Parameter(description = "Datos del usuario a crear", required = true, schema = @Schema(implementation = UsuarioDTO.class))
+            @Valid @RequestBody UsuarioDTO usuarioDTO) {
+
+        logger.info("Solicitud recibida para crear un nuevo usuario: {}", usuarioDTO.nombre());
 
         try {
-            Usuario nuevoUsuario = usuarioService.save(usuario);
-            logger.info("Usuario creado exitosamente con ID: {}", nuevoUsuario.getId());
-            return ResponseEntity.status(HttpStatus.CREATED).body(nuevoUsuario); // 201 Created
+            // Convertir UsuarioDTO a Usuario
+            Usuario usuario = new Usuario(
+                    null, // Se asume que el ID es autogenerado
+                    usuarioDTO.nombre(),
+                    usuarioDTO.cedula(),
+                    usuarioDTO.email(),
+                    RolUsuario.valueOf(usuarioDTO.rol()),
+                    usuarioDTO.clase(),
+                    usuarioDTO.clave()
+            );
+
+            // Guardar usuario en la base de datos y recibir el DTO resultante
+            UsuarioResponseDTO usuarioGuardadoDTO = usuarioService.save(usuario);
+
+            logger.info("Usuario creado exitosamente con ID: {}", usuarioGuardadoDTO.id());
+            return ResponseEntity.status(HttpStatus.CREATED).body(usuarioGuardadoDTO); // 201 Created
+
         } catch (ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.CONFLICT) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -200,6 +220,7 @@ public class UsuarioController {
             }
         }
     }
+
 
 
 
@@ -249,15 +270,15 @@ public class UsuarioController {
     public ResponseEntity<?> updateUsuario(
             @Parameter(description = "ID del usuario a actualizar", required = true, example = "1")
             @PathVariable Long id,
-            @Parameter(description = "Objeto JSON con los nuevos datos del usuario", required = true, schema = @Schema(implementation = Usuario.class))
-            @Valid @RequestBody Usuario usuarioDetails) {
+            @Parameter(description = "Objeto JSON con los nuevos datos del usuario", required = true, schema = @Schema(implementation = UsuarioDTO.class))
+            @Valid @RequestBody UsuarioDTO usuarioDTO) {
 
         logger.info("Solicitud recibida para actualizar usuario con ID: {}", id);
 
         try {
-            Usuario updatedUsuario = usuarioService.updateUsuario(id, usuarioDetails);
+            UsuarioDTO usuarioActualizadoDTO = usuarioService.updateUsuario(id, usuarioDTO);
             logger.info("Usuario con ID {} actualizado correctamente.", id);
-            return ResponseEntity.ok(updatedUsuario); // 200 OK
+            return ResponseEntity.ok(usuarioActualizadoDTO); // 200 OK
 
         } catch (ResponseStatusException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
@@ -381,26 +402,21 @@ public class UsuarioController {
         logger.info("Solicitud PATCH recibida para actualizar usuario con ID: {}", id);
 
         try {
-            Usuario updatedUsuario = usuarioService.partialUpdateUsuario(id, updates);
+            UsuarioDTO updatedUsuario = usuarioService.partialUpdateUsuario(id, updates);
             logger.info("Usuario con ID {} actualizado parcialmente.", id);
             return ResponseEntity.ok(updatedUsuario);
 
         } catch (ResponseStatusException e) {
-            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
-                logger.warn("Usuario con ID {} no encontrado.", id);
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ErrorResponse(404, "Usuario no encontrado con ID: " + id));
-            } else if (e.getStatusCode() == HttpStatus.CONFLICT) {
-                logger.warn("Conflicto al actualizar usuario con ID {}: {}", id, e.getReason());
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(new ErrorResponse(409, e.getReason()));
-            } else {
-                logger.error("Error interno al actualizar usuario con ID {}: {}", id, e.getReason());
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(new ErrorResponse(500, "Error interno al actualizar el usuario"));
-            }
+            HttpStatus status = (HttpStatus) e.getStatusCode();
+            logger.warn("Error al actualizar usuario con ID {}: {}", id, e.getReason());
+            return ResponseEntity.status(status).body(new ErrorResponse(status.value(), e.getReason()));
+        } catch (Exception e) {
+            logger.error("Error interno al actualizar usuario con ID {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(500, "Error interno al actualizar el usuario"));
         }
     }
+
 
 
 }

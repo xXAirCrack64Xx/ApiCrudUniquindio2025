@@ -64,5 +64,23 @@ public class Usuario {
     @Schema(description = "Clase a la que pertenece el usuario", example = "Programación I")
     @Size(max = 50, message = "El nombre de la clase no puede superar los 50 caracteres")
     private String clase;
+
+    @Schema(description = "contraseña del usuario", example = "123")
+    @Size (max = 20, min = 5, message = "solo se pueden claves entre 5 y 20 caracteres")
+    @NotBlank (message = "la contraseña es obligatoria")
+    private String clave;
+
+    public Usuario(Long id, String nombre, String cedula, String email, RolUsuario rolUsuario, String clase, String clave) {
+        this.id = id;
+        this.nombre = nombre;
+        this.cedula = cedula;
+        this.email = email;
+        this.rol = rolUsuario;
+        this.clase = clase;
+        this.clave = clave;
+    }
+    // Constructor por defecto (requerido por Hibernate)
+    public Usuario() {
+    }
 }
 
