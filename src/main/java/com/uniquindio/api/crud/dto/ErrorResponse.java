@@ -15,5 +15,7 @@ public class ErrorResponse {
 
     @Schema(description = "Mensaje detallado de la solicitud", example = "Se obtuvieron los usuarios de forma exitosa")
     private String message;
+
+
 }
 
